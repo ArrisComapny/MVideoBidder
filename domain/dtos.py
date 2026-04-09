@@ -58,3 +58,14 @@ class Campaign:
             updated_at=parse_dt(data["updated_at"]),
             items=[]
         )
+
+@dataclass(slots=True)
+class Task:
+    campaign_id: int
+    sku: int
+    category_id: int
+    region: list[int]
+    keywords: list[str]
+    bid: float
+    limit: float
+    position: int

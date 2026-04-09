@@ -22,7 +22,7 @@ from selenium.webdriver.firefox.service import Service
 
 from database.models import Market
 from database.db import DbConnection
-from domain.dtos import Campaign, Item
+from domain.dtos import Campaign, Item, Task
 from .create_extension_proxy import create_firefox_proxy_addon
 
 TIME_AWAIT = 10
@@ -340,7 +340,46 @@ class WebDriver:
                 continue
         return {}
 
-    def bidder(self) -> list[Campaign]:
+    def get_top_bids(self, task: Task) -> list[int]:
+        for _ in range(3):
+            try:
+                headers = self.capture_headers()
+                session = self._build_requests_session()
+
+                response = session.post(
+                    f"{self.base_url}/seller-api/v1/topbids?limit=4",
+                    json={
+                        'category_id': task.category_id,
+                        'queries': task.keywords,
+                        'regions': task.region
+                    },
+                    headers=headers,
+                    timeout=30,
+                )
+                return response.json()
+            except:
+                continue
+        return []
+
+    def change_bid(self, campaign_id: int, body: list[dict]) -> bool:
+        for _ in range(3):
+            try:
+                headers = self.capture_headers()
+                session = self._build_requests_session()
+
+                response = session.post(
+                    f"{self.base_url}/seller-api/v1/campaigns/{campaign_id}/skus",
+                    json=body,
+                    headers=headers,
+                    timeout=30,
+                )
+                print(response.status_code)
+                return response.status_code == 201
+            except:
+                continue
+        return False
+
+    def bidder_info(self) -> list[Campaign]:
         campaigns: list[dict] = self.get_campaigns()
         campaigns: list[Campaign] = [Campaign.from_dict(campaign) for campaign in campaigns]
 
@@ -352,8 +391,9 @@ class WebDriver:
                 bid = round(row.get("bid", 0) / 100, 2)
                 quantity = row.get("quantity")
                 keywords = row.get("keywords", [])
+                active = row.get("active")
 
-                if all([sku, name]) and quantity is not None:
+                if all([name, sku]) and quantity is not None and active:
                     data = self.get_category(sku)[0]
                     category = data.get("name")
                     category_id = data.get("id")
@@ -361,11 +401,8 @@ class WebDriver:
 
                     while isinstance(children, list):
                         category = children[0].get("name")
-                        category_id = data.get("id")
+                        category_id = children[0].get("id")
                         children = children[0].get("children")
-
-                    if category is None:
-                        print(f'Не удалось получить категорию')
 
                     campaign.items.append(Item(
                         sku=sku,
@@ -376,10 +413,76 @@ class WebDriver:
                         category_id=category_id,
                         keywords=keywords
                     ))
-                else:
-                    print(f'Недостаточно данных')
 
         return campaigns
+
+    def bidder(self, tasks: list[Task]) -> None:
+        task_map = {}
+
+        for task in tasks:
+            if task.limit and task.position:
+                task_map.setdefault(task.category_id, [])
+                task_map[task.category_id].append(task)
+
+        for value in task_map.values():
+            value.sort(key=lambda x: x.position)
+
+        for category_id, items in task_map.items():
+            for item in items:
+                while item.position < 5:
+                    print(item)
+                    top_bids = self.get_top_bids(item)
+                    if top_bids is None:
+                        print('Нет данных о ставках')
+                        break
+
+                    format_bid = int(item.bid / 10)
+                    pos_bid = top_bids[item.position - 1]
+                    if pos_bid == format_bid:
+                        print(f'Товар уже занимает позицию {item.position}')
+                        break
+
+                    bid_rub = (pos_bid + 1) * 10
+                    print(f'Чтобы поднять товар до {item.position} нужно изменить ставку до {bid_rub}')
+                    if bid_rub > item.limit:
+                        print(f'Ставка позиции {bid_rub} больше лимита {item.limit}')
+                        for item2 in items:
+                            item2.position += 1
+                            continue
+                    print(f'Смена, увеличение затрат на {bid_rub - item.bid}')
+                    if bid_rub - item.bid > 20:
+                        break
+
+                    rows = self.get_items(item.campaign_id)
+
+                    body = []
+                    for row in rows:
+                        sku = row.get("sku_id")
+                        bid = row.get("bid")
+                        keywords = row.get("keywords")
+                        active = row.get("active")
+
+                        if sku == item.sku:
+                            bid = bid_rub * 100
+
+                        body.append({
+                            "active": active,
+                            "bid": bid,
+                            "keywords": keywords,
+                            "sku_id": sku,
+                        })
+                    print(body)
+                    # answer = self.change_bid(item.campaign_id, body)
+                    # if answer:
+                    #     print("Смена прошла успешна")
+                    # else:
+                    #     print("Что-то пошло не так")
+                    break
+
+                else:
+                    print(f'Позиция {item.position} больше лимита в 4')
+                continue
+
 
     def load_url(self, url: str) -> None:
         print(f"{self.log_startswith}Браузер открыт")
