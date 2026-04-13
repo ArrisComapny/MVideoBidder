@@ -61,7 +61,7 @@ class DbConnection:
 
     @retry_on_exception()
     def get_market(self) -> Type[Market]:
-        market = self.session.query(Market).filter_by(marketplace="МВидео").first()
+        market = self.session.query(Market).filter_by(marketplace="МВидео", entrepreneur="Бурчян Г.С.").first()
         return market
 
 

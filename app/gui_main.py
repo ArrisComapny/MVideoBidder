@@ -176,7 +176,7 @@ class MainWindow(QMainWindow):
         self.webdriver = webdriver
         self.url = url
         self.auto_load = auto_load
-        self.storage_path = Path("campaign_state.json")
+        self.storage_path = Path("../campaign_state.json")
 
         self.is_running = False
         self.cycle_interval_ms = 2 * 60 * 1000
@@ -462,8 +462,11 @@ class MainWindow(QMainWindow):
             for item in campaign.get("items", []):
                 limit = float(item.get("limit", 0.0))
                 position = int(item.get("position", 0))
-                if not all([limit, position]):
+                quantity = int(item.get("quantity", 0))
+
+                if not all([limit, position, quantity]):
                     continue
+
                 tasks.append(
                     Task(
                         campaign_id=campaign_id,
