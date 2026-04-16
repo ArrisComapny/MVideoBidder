@@ -1,8 +1,8 @@
 .idea/
 config.py
-campaign_state.json
+*.json
 /.venv/
-/logs/
+/log/
 /dist*/
 /build/
 /profile/
@@ -11,4 +11,3 @@ campaign_state.json
 *.rar
 __pycache__/
 *.pyc
-credentials.jsonb
