@@ -2,11 +2,10 @@ import os
 import sys
 import json
 import time
+import logging
+import platform
 import requests
 import datetime
-import subprocess
-import platform
-import logging
 
 from typing import Type
 from pathlib import Path
@@ -31,38 +30,6 @@ from .create_extension_proxy import create_firefox_proxy_addon
 
 TIME_AWAIT = 10
 logger = logging.getLogger("mvideo_bidder")
-
-def kill_processes_by_name(*process_names: str) -> None:
-    if platform.system().lower() != "windows":
-        return
-
-    for process_name in process_names:
-        try:
-            result = subprocess.run(
-                ["taskkill", "/F", "/IM", process_name],
-                capture_output=True,
-                text=True,
-                encoding="cp866",
-                errors="replace",
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-
-            stdout = (result.stdout or "").strip()
-            stderr = (result.stderr or "").strip()
-            output = f"{stdout}\n{stderr}".lower()
-
-            if result.returncode == 0:
-                logger.info(f"Завершён процесс: {process_name}")
-            elif "не найден" in output or "not found" in output:
-                logger.info(f"Процесс не найден: {process_name}")
-            else:
-                logger.info(
-                    f"Не удалось завершить {process_name}. "
-                    f"stdout={stdout} stderr={stderr}"
-                )
-
-        except Exception as e:
-            logger.exception(f"Ошибка при завершении процесса {process_name}: {e}")
 
 
 def get_app_dir() -> Path:
@@ -155,7 +122,7 @@ class WebDriver:
         bit = "64" if platform.machine().endswith("64") else ""
 
         self.options = Options()
-        # self.options.add_argument("-headless")
+        self.options.add_argument("-headless")
         self.options.add_argument("-no-remote")
         self.options.add_argument("-profile")
         self.options.add_argument(self.profile_path)
@@ -228,8 +195,6 @@ class WebDriver:
         logger.info(f"Используется Firefox: {firefox_path}")
         logger.info(f"Используется geckodriver: {geckodriver_path}")
 
-        self.cleanup_stale_processes()
-
         self.driver = webdriver.Firefox(service=self.service, options=self.options)
         self.driver.install_addon(ext_path, temporary=True)
         self.driver.maximize_window()
@@ -244,29 +209,33 @@ class WebDriver:
 
     def check_auth(self) -> None:
         try:
-            self.log(f"{self.log_startswith}Проверка авторизации")
-
-            WebDriverWait(self.driver, TIME_AWAIT * 3).until(
+            WebDriverWait(self.driver, TIME_AWAIT * 4).until(
                 lambda driver: driver.execute_script("return document.readyState") == "complete"
             )
 
-            time.sleep(2)
-            current_url = self.driver.current_url
-            self.log(f"{self.log_startswith}Текущий URL: {current_url}")
+            last_url = None
 
-            if self.marketplace.link in current_url:
+            for _ in range(6):
+                if last_url == self.driver.current_url:
+                    break
+                last_url = self.driver.current_url
+                WebDriverWait(self.driver, TIME_AWAIT * 4).until(
+                    lambda driver: driver.execute_script("return document.readyState") == "complete"
+                )
+                time.sleep(TIME_AWAIT)
+            else:
+                Exception("Превышено время загрузки страницы")
+
+            if self.marketplace.link in last_url:
                 self.log(f"{self.log_startswith}Автоматизация запущена")
+
                 self.mvideo_auth(self.marketplace)
-                return
 
-            if self.marketplace.domain in current_url:
+            if self.marketplace.domain in last_url:
                 self.log(f"{self.log_startswith}Вход в ЛК выполнен")
-                return
-
-            self.log(f"{self.log_startswith}Неожиданный URL после загрузки: {current_url}")
 
         except (NoSuchWindowException, InvalidSessionIdException):
-            self.quit("Окно браузера было преждевременно закрыто")
+            self.quit('Окно браузера было преждевременно закрыто')
         except Exception as e:
             self.quit(str(e).splitlines()[0])
 
@@ -566,33 +535,12 @@ class WebDriver:
                     self.log(f"{self.log_startswith}Обработка товара: {text}")
 
                     top_bids = self.get_top_bids(item)
+                    if top_bids is None:
+                        self.log(f"{self.log_startswith}Нет данных о ставках")
+                        break
 
-                    try:
-                        # self.log(
-                        #     f"{self.log_startswith}DEBUG before index: "
-                        #     f"sku={item.sku}, position={item.position}, top_bids={top_bids}"
-                        # )
-
-                        if not isinstance(top_bids, list) or not top_bids:
-                            self.log(f"{self.log_startswith}Нет данных о ставках")
-                            break
-
-                        # if len(top_bids) < item.position:
-                        #     self.log(
-                        #         f"{self.log_startswith}Недостаточно ставок: "
-                        #         f"sku={item.sku}, position={item.position}, top_bids={top_bids}"
-                        #     )
-                        #     break
-
-                        format_bid = int(item.bid / 10)
-                        pos_bid = top_bids[item.position - 1]
-
-                    except Exception as e:
-                        self.log(
-                            f"{self.log_startswith}Падение на обработке top_bids: "
-                            f"sku={item.sku}, position={item.position}, top_bids={top_bids}, error={e}"
-                        )
-                        raise
+                    format_bid = int(item.bid / 10)
+                    pos_bid = top_bids[item.position - 1]
 
                     if pos_bid == format_bid:
                         self.log(f"{self.log_startswith}Товар уже занимает позицию {item.position}")
@@ -641,41 +589,12 @@ class WebDriver:
                 else:
                     self.log(f"{self.log_startswith}Позиция {item.position} больше лимита в 4")
 
+
     def load_url(self, url: str) -> None:
         self.log(f"{self.log_startswith}Браузер открыт")
         self.log(f"{self.log_startswith}Авторизация")
-
-        last_error = None
-
-        for attempt in range(1, 4):
-            try:
-                self.log(f"{self.log_startswith}Попытка открытия страницы #{attempt}: {url}")
-
-                self.driver.get(url)
-                time.sleep(2)
-
-                WebDriverWait(self.driver, TIME_AWAIT * 2).until(
-                    lambda driver: driver.execute_script("return document.readyState") == "complete"
-                )
-
-                self.log(f"{self.log_startswith}Страница загружена: {self.driver.current_url}")
-                self.check_auth()
-                return
-
-            except Exception as e:
-                last_error = e
-                self.log(f"{self.log_startswith}Ошибка открытия страницы #{attempt}: {e}")
-
-                try:
-                    self.log(f"{self.log_startswith}Пробуем обновить страницу")
-                    self.driver.refresh()
-                    time.sleep(2)
-                except Exception as refresh_error:
-                    self.log(f"{self.log_startswith}Ошибка при refresh: {refresh_error}")
-
-                time.sleep(3)
-
-        raise Exception(f"Не удалось открыть страницу после 3 попыток: {last_error}")
+        self.driver.get(url)
+        self.check_auth()
 
     def is_browser_active(self) -> bool:
         try:
@@ -695,14 +614,3 @@ class WebDriver:
         else:
             self.log(f"{self.log_startswith}Браузер закрыт")
             self.driver.quit()
-
-    def cleanup_stale_processes(self) -> None:
-        try:
-            self.log(f"{self.log_startswith}Проверка зависших процессов браузера")
-        except Exception:
-            pass
-
-        kill_processes_by_name("geckodriver.exe", "firefox.exe")
-        time.sleep(5)
-
-
