@@ -1,5 +1,8 @@
 import sys
 
+from updater.update_service import check_update, run_update
+from updater.update_dialogs import ask_update, show_update_window
+
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import QObject, QThread, Slot
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -100,15 +103,61 @@ def main() -> int:
     logger.info("Запуск приложения")
 
     app = QApplication(sys.argv)
-
     app.setWindowIcon(QIcon(ICON_PATH))
+
+    try:
+        has_update, message, info = check_update()
+        logger.info(f"Результат check_update: has_update={has_update}, message={message}")
+
+        if has_update:
+            approved = ask_update(message)
+
+            if approved:
+                logger.info("Пользователь согласился на обновление")
+
+                update_window = show_update_window(app)
+
+                def progress_cb(value: int):
+                    update_window.set_progress(value)
+                    app.processEvents()
+
+                def log_cb(text: str):
+                    update_window.append_log(text)
+                    app.processEvents()
+
+                def status_cb(text: str):
+                    update_window.set_status(text)
+                    app.processEvents()
+
+                try:
+                    run_update(
+                        info,
+                        progress_callback=progress_cb,
+                        log_callback=log_cb,
+                        status_callback=status_cb,
+                    )
+                    return 0
+                except Exception as e:
+                    update_window.close()
+                    logger.exception(f"Ошибка запуска обновления: {e}")
+
+                    QMessageBox.critical(
+                        None,
+                        "Ошибка обновления",
+                        f"Не удалось скачать или запустить обновление.\n\n{e}"
+                    )
+            else:
+                logger.info("Пользователь отказался от обновления")
+
+    except Exception as e:
+        logger.exception(f"Ошибка проверки обновления: {e}")
 
     controller = StartupController(app, logger)
     controller.start()
 
     app._startup_controller = controller
-
     return app.exec()
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

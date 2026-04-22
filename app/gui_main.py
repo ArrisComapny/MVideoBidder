@@ -2,6 +2,8 @@ import re
 import json
 import logging
 
+from updater.version import APP_VERSION
+
 from pathlib import Path
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QTimer, QThread, Signal
@@ -173,7 +175,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, db_conn, webdriver=None, url: str = "", auto_load: bool = True) -> None:
         super().__init__()
-        self.setWindowTitle("MVideo Bidder")
+        self.setWindowTitle(f"MVideo Bidder v{APP_VERSION}")
         self.resize(1450, 700)
 
         self.db_conn = db_conn

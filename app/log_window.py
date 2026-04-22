@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from updater.version import APP_VERSION
+
 from PySide6.QtCore import QObject, QThread, Signal, Qt, QTimer
 from PySide6.QtWidgets import QLabel, QMainWindow, QTextEdit, QVBoxLayout, QWidget
 
@@ -37,7 +39,7 @@ class LogWorker(QObject):
 class LogWindow(QMainWindow):
     def __init__(self, main_window, webdriver, url: str) -> None:
         super().__init__()
-        self.setWindowTitle("MVideo Bidder - Логи запуска")
+        self.setWindowTitle(f"MVideo Bidder v{APP_VERSION} - Логи запуска")
         self.resize(500, 200)
 
         self.main_window = main_window

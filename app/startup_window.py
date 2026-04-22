@@ -3,11 +3,13 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QMainWindow, QProgressBar, QVBoxLayout, QWidget
 
+from updater.version import APP_VERSION
+
 
 class StartupWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("MVideo Bidder")
+        self.setWindowTitle(f"MVideo Bidder v{APP_VERSION}")
         self.setFixedSize(420, 140)
         self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, False)
         self.setWindowFlag(Qt.WindowType.WindowMinimizeButtonHint, False)
