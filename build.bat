@@ -8,14 +8,21 @@ if not defined VIRTUAL_ENV (
     exit /b 1
 )
 
+echo Сборка основного приложения...
 python -m PyInstaller --noconfirm --clean my.spec
 if errorlevel 1 (
-    echo Сборка завершилась с ошибкой.
+    echo Сборка my.spec завершилась с ошибкой.
     goto :end
 )
 
-set "APPDIR=dist"
+echo Сборка updater...
+python -m PyInstaller --noconfirm --clean updater.spec
+if errorlevel 1 (
+    echo Сборка updater.spec завершилась с ошибкой.
+    goto :end
+)
 
+set "APPDIR=dist\MVideoBidder"
 
 :found_app
 echo Найдена папка приложения: "%APPDIR%"
