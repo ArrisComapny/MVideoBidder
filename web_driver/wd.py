@@ -122,7 +122,7 @@ class WebDriver:
         bit = "64" if platform.machine().endswith("64") else ""
 
         self.options = Options()
-        # self.options.add_argument("-headless")
+        self.options.add_argument("-headless")
         self.options.add_argument("-no-remote")
         self.options.add_argument("-profile")
         self.options.add_argument(self.profile_path)
