@@ -1,6 +1,6 @@
 from typing import Any
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 status = {
@@ -48,7 +48,7 @@ class Campaign:
             payment_model=data["payment_model"],
             budget_total=data["budget_total"],
             from_date=parse_dt(data["from_date"]),
-            regions=data["regions"],
+            regions=data.get("regions", []),
             status=status.get(data["status"], data["status"]),
             spent_daily=data["spent_daily"],
             spent_total=data["spent_total"],
