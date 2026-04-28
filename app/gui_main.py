@@ -212,8 +212,6 @@ class MainWindow(QMainWindow):
 
         self.model = CampaignTableModel(on_change=self.save_table_state)
 
-        self.filters_expanded = True
-
         self.filter_menus = {}
         self.filter_actions = {
             "shop": {},
@@ -260,11 +258,6 @@ class MainWindow(QMainWindow):
         filter_layout = QHBoxLayout(self.filter_bar)
         filter_layout.setContentsMargins(6, 6, 6, 6)
 
-        self.filters_toggle_button = QPushButton("☰")
-        self.filters_toggle_button.setFixedWidth(42)
-        self.filters_toggle_button.setToolTip("Показать / скрыть фильтры")
-        self.filters_toggle_button.clicked.connect(self.toggle_filters_panel)
-
         self.search_filter = QLineEdit()
         self.search_filter.setPlaceholderText("Поиск по магазину, ID, категории, SKU")
         self.search_filter.textChanged.connect(self.apply_filters)
@@ -287,7 +280,6 @@ class MainWindow(QMainWindow):
             "category": self.category_filter_menu,
         }
 
-        filter_layout.addWidget(self.filters_toggle_button)
         filter_layout.addWidget(self.search_filter)
         filter_layout.addWidget(self.shop_filter_button)
         filter_layout.addWidget(self.campaign_filter_button)
@@ -341,16 +333,6 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.table)
 
         self.setCentralWidget(root)
-
-    def toggle_filters_panel(self) -> None:
-        self.filters_expanded = not self.filters_expanded
-
-        self.search_filter.setVisible(self.filters_expanded)
-        self.shop_filter_button.setVisible(self.filters_expanded)
-        self.campaign_filter_button.setVisible(self.filters_expanded)
-        self.category_filter_button.setVisible(self.filters_expanded)
-
-        self.filters_toggle_button.setText("☰" if self.filters_expanded else "▶")
 
     def rebuild_filter_menus(self) -> None:
         rows = self.model.get_rows()
